@@ -12,72 +12,85 @@ A comprehensive management and accounting system for Dominion Pre & Primary Scho
 - Support multi-term, multi-year academic tracking.
 
 ## Architecture
-- **Frontend:** React (TypeScript) + Ant Design
-- **Backend:** Node.js / Express
-- **Database:** MySQL (Local or Docker-based)
-- **ORM:** Prisma (Recommended for type-safety and clean queries)
+- **Frontend:** React + TypeScript
+- **UI Library:** Ant Design (for fast, professional admin dashboards)
+- **Backend:** Node.js + Express
+- **Database:** MySQL (local or Docker)
+- **ORM:** Prisma (type-safe, auto-generated types)
 - **Authentication:** JWT-based
-- **Deployment:** Local-first with optional PWA (Progressive Web App) support for offline use.
+- **Deployment:** Local (PWA with offline capability)
+
+## Architecture
+- **Frontend:** React + TypeScript
+- **UI Library:** Ant Design (for fast, professional admin dashboards)
+- **Backend:** Node.js + Express
+- **Database:** MySQL (local or Docker)
+- **ORM:** Prisma (type-safe, auto-generated types)
+- **Authentication:** JWT-based
+- **Deployment:** Local (PWA with offline capability)
 
 ---
 
-## Step 1: Database Schema Design
-
-### MySQL Compatibility Adjustments
-Since we are using **MySQL** instead of PostgreSQL, the following adjustments are applied:
-- **Primary Keys:** Use `CHAR(36)` for UUIDs or `BIGINT AUTO_INCREMENT` for simplicity and performance.
-- **JSON Data:** Use the `JSON` type instead of `JSONB`.
-- **Logic:** Move database-level logic (like `pg_cron`) to Node.js cron jobs (`node-cron`).
-- **Extensions:** Remove Postgres-specific extensions like `pgcrypto`.
+## Step 1: Database Schema Design (MySQL)
 
 ### Core Entities
-| Model | Description | Key Fields |
-|-------|-------------|------------|
-| `AcademicYear` | School year definition | id (UUID), year (e.g., 2026), start_date, end_date, is_active |
-| `AcademicTerm` | Term within a year | id (UUID), academic_year_id, name (1st/2nd/3rd), start_date, end_date, is_active |
-| `Class` | Student class/grade | id (UUID), name (Baby, Middle, Pre-Unit, etc.), term_fee, annual_fee |
-| `Student` | Pupil record | id (UUID), admission_no (string), id_pass_no (string), name, gender, date_of_birth, class_id, guardian_id, family_id, status (active/promoted/withdrawn), photo_path, created_at |
-| `Guardian` | Parent/guardian info | id (UUID), name, phone, email, address, alternate_contact, family_id |
-| `Family` | Sibling grouping | id (UUID), family_name, discount_amount, discount_type (fixed/percentage) |
-| `Transport` | Transport service | id (UUID), student_id, monthly_rate, start_term, end_term, status (active/inactive), vehicle_details |
-| `FeeStructure` | Fee definitions | id (UUID), class_id, academic_term_id, fee_type (tuition/transport/stationery/ID), amount |
-| `StudentFee` | Student-specific fees | id (UUID), student_id, academic_term_id, total_amount, discount_amount, net_amount, is_sponsored, sponsor_name |
-| `Payment` | Payment records | id (UUID), student_id, amount, payment_date, payment_method (cash/mobile/bank), receipt_no, term_id, recorded_by (user_id), notes, status (active/voided), void_reason, created_at |
-| `PaymentAllocation` | Payment distribution | id (UUID), payment_id, fee_type, amount_allocated, term_id |
-| `InventoryItem` | School supplies | id (UUID), name (Ream, File, Uniform, Kofia), unit_cost, stock_quantity, reorder_level |
-| `StudentInventory` | Items assigned to students | id (UUID), student_id, item_id, quantity, term_id, is_paid, status (pending/fulfilled) |
-| `Receipt` | Official receipt | id (UUID), receipt_no, student_id, payment_id, issued_date, issued_by, pdf_path |
-| `DebtRecord` | Arrears tracking | id (UUID), student_id, term_id, amount_owed, due_date, status (pending/partial/paid), notes |
-| `Promotion` | Class promotion history | id (UUID), student_id, from_class_id, to_class_id, promotion_date, academic_year_id |
-| `User` | System users | id (UUID), name, email, role (admin/accounts/director/reception), password_hash, created_at, last_login |
-| `Comment` | Notes on student accounts | id (UUID), student_id, comment_text, created_by, created_at |
-| `SystemLog` | Audit trail | id (UUID), user_id, action, entity_type, entity_id, timestamp, details (JSON) |
-| `Notification` | SMS/Email logs | id (UUID), student_id, guardian_id, message, channel (sms/email), status, sent_at |
+| Model | Description | Key Fields (MySQL) |
+|-------|-------------|-------------------|
+| `academic_years` | School year definition | id (BIGINT AUTO_INCREMENT), year (e.g., 2026), start_date, end_date, is_active (TINYINT) |
+| `academic_terms` | Term within a year | id (BIGINT AUTO_INCREMENT), academic_year_id (BIGINT), name (1st/2nd/3rd), start_date, end_date, is_active (TINYINT) |
+| `classes` | Student class/grade | id (BIGINT AUTO_INCREMENT), name (Baby, Middle, Pre-Unit, etc.), term_fee (INT), annual_fee (INT) |
+| `students` | Pupil record | id (BIGINT AUTO_INCREMENT), admission_no (VARCHAR 50 UNIQUE), id_pass_no (VARCHAR 50), name (VARCHAR 100), gender (ENUM("M","F")), date_of_birth (DATE), class_id (BIGINT), guardian_id (BIGINT), family_id (BIGINT), status (ENUM("active","promoted","withdrawn")), photo_path (VARCHAR 255), created_at (TIMESTAMP) |
+| `guardians` | Parent/guardian info | id (BIGINT AUTO_INCREMENT), name (VARCHAR 100), phone (VARCHAR 20), email (VARCHAR 100), address (VARCHAR 255), alternate_contact (VARCHAR 20), family_id (BIGINT) |
+| `families` | Sibling grouping | id (BIGINT AUTO_INCREMENT), family_name (VARCHAR 100), discount_amount (INT), discount_type (ENUM("fixed","percentage")) |
+| `transport` | Transport service | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), monthly_rate (INT), start_term_id (BIGINT), end_term_id (BIGINT), status (ENUM("active","inactive")), vehicle_details (VARCHAR 255) |
+| `fee_structures` | Fee definitions | id (BIGINT AUTO_INCREMENT), class_id (BIGINT), academic_term_id (BIGINT), fee_type (ENUM("tuition","transport","stationery","id")), amount (INT) |
+| `student_fees` | Student-specific fees | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), academic_term_id (BIGINT), total_amount (INT), discount_amount (INT), net_amount (INT), is_sponsored (TINYINT), sponsor_name (VARCHAR 100) |
+| `payments` | Payment records | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), amount (INT), payment_date (DATE), payment_method (ENUM("cash","mobile","bank")), receipt_no (VARCHAR 50), term_id (BIGINT), recorded_by (BIGINT), notes (TEXT), status (ENUM("active","voided")), void_reason (TEXT), created_at (TIMESTAMP) |
+| `payment_allocations` | Payment distribution | id (BIGINT AUTO_INCREMENT), payment_id (BIGINT), fee_type (VARCHAR 50), amount_allocated (INT), term_id (BIGINT) |
+| `inventory_items` | School supplies | id (BIGINT AUTO_INCREMENT), name (Ream, File, Uniform, Kofia), unit_cost (INT), stock_quantity (INT), reorder_level (INT) |
+| `student_inventory` | Items assigned to students | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), item_id (BIGINT), quantity (INT), term_id (BIGINT), is_paid (TINYINT), status (ENUM("pending","fulfilled")) |
+| `receipts` | Official receipt | id (BIGINT AUTO_INCREMENT), receipt_no (VARCHAR 50 UNIQUE), student_id (BIGINT), payment_id (BIGINT), issued_date (DATE), issued_by (BIGINT), pdf_path (VARCHAR 255) |
+| `debt_records` | Arrears tracking | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), term_id (BIGINT), amount_owed (INT), due_date (DATE), status (ENUM("pending","partial","paid")), notes (TEXT) |
+| `promotions` | Class promotion history | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), from_class_id (BIGINT), to_class_id (BIGINT), promotion_date (DATE), academic_year_id (BIGINT) |
+| `users` | System users | id (BIGINT AUTO_INCREMENT), name (VARCHAR 100), email (VARCHAR 100 UNIQUE), role (ENUM("admin","accounts","director","reception")), password_hash (VARCHAR 255), created_at (TIMESTAMP), last_login (TIMESTAMP) |
+| `comments` | Notes on student accounts | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), comment_text (TEXT), created_by (BIGINT), created_at (TIMESTAMP) |
+| `system_logs` | Audit trail | id (BIGINT AUTO_INCREMENT), user_id (BIGINT), action (VARCHAR 100), entity_type (VARCHAR 50), entity_id (BIGINT), timestamp (TIMESTAMP), details (JSON) |
+| `notifications` | SMS/Email logs | id (BIGINT AUTO_INCREMENT), student_id (BIGINT), guardian_id (BIGINT), message (TEXT), channel (ENUM("sms","email")), status (ENUM("pending","sent","failed")), sent_at (TIMESTAMP) |
 
 ### Entity Relationships
-- Guardian → Students (one-to-many)
-- Family → Guardians (one-to-many, for sibling discounts)
-- Class → Students (one-to-many)
-- Student → Transport (one-to-one active per term)
-- Student → Payments (one-to-many)
-- Student → DebtRecord (one-to-many)
-- Student → StudentInventory (one-to-many)
-- Student → Comment (one-to-many)
-- AcademicYear → AcademicTerm (one-to-many)
-- User → Payments (one-to-many, recorded_by)
-- User → SystemLog (one-to-many)
-- Payment → PaymentAllocation (one-to-many)
+- guardians → students (one-to-many via guardian_id)
+- families → guardians (one-to-many via family_id)
+- classes → students (one-to-many via class_id)
+- students → transport (one-to-one active per term via student_id)
+- students → payments (one-to-many via student_id)
+- students → debt_records (one-to-many via student_id)
+- students → student_inventory (one-to-many via student_id)
+- students → comments (one-to-many via student_id)
+- academic_years → academic_terms (one-to-many via academic_year_id)
+- users → payments (one-to-many via recorded_by)
+- users → system_logs (one-to-many via user_id)
+- payments → payment_allocations (one-to-many via payment_id)
+
+### MySQL-Specific Notes
+- Use `BIGINT AUTO_INCREMENT` for all primary keys (simpler than UUID)
+- Use `JSON` type for details field in system_logs (not JSONB)
+- Use `ENUM` for status fields (MySQL native support)
+- Use `TINYINT(1)` for boolean fields (is_active, is_sponsored, is_paid)
+- Use `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` for created_at fields
+- Add indexes on: admission_no, id_pass_no, student_id, term_id, payment_date
+- Foreign keys with `ON DELETE RESTRICT` to prevent accidental deletions
 
 ---
 
 ## Step 2: Features by Development Phase
 
 ### Phase 1: Core Foundation (MVP) - Weeks 1-4
-- [ ] Student registration with unique ID/Admission number generation
+**Goal: Launch early, test with real users**
+- [ ] Student registration with unique admission number generation
 - [ ] Class management (Baby, Middle, Pre-Unit, etc.)
 - [ ] Guardian/Parent information capture
 - [ ] Fee structure setup per class/term
-- [ ] Payment recording with receipt generation
+- [ ] Payment entry (FAST, minimal clicks)
 - [ ] Balance calculation (auto: total - paid = balance)
 - [ ] Student search by name, ID, or class
 - [ ] Basic dashboard (total students, collections today, outstanding)
@@ -89,19 +102,19 @@ Since we are using **MySQL** instead of PostgreSQL, the following adjustments ar
 - [ ] Installment payment support
 - [ ] Sponsored student flagging
 - [ ] Stationery/Inventory tracking (Reams, Files, Uniforms, Kofia)
-- [ ] Receipt reprint capability
+- [ ] Receipt generation and reprint (PDF)
 - [ ] Payment history per student (ledger view)
 - [ ] Payment allocation engine (split payments across fee types)
 
-### Phase 3: Advanced Features - Weeks 9-11
+### Phase 3: Advanced Operations - Weeks 9-11
 - [ ] Student promotion workflow (end-of-term class changes)
 - [ ] Multi-term and multi-year support
 - [ ] New student onboarding workflow
 - [ ] ID Pass management (issue, re-issue, track)
-- [ ] Comment/Notes system for special arrangements
+- [ ] Comment/Notes system for special arrangements ("MOM CALLED")
 - [ ] Bulk payment import (for batch entries)
 - [ ] Data export (Excel, PDF)
-- [ ] Void/cancel payment with audit trail
+- [ ] Void/cancel payment with audit trail (requires reason)
 
 ### Phase 4: Reporting & Communication - Weeks 12-14
 - [ ] Fee collection report (daily/weekly/monthly)
@@ -110,7 +123,7 @@ Since we are using **MySQL** instead of PostgreSQL, the following adjustments ar
 - [ ] Debtors list with deadlines
 - [ ] Family-wise billing summary
 - [ ] Term comparison reports
-- [ ] Student statement/ledger (printable)
+- [ ] Student statement/ledger (printable PDF)
 - [ ] SMS/WhatsApp payment reminders (integration)
 - [ ] Email fee statements to parents
 
@@ -118,12 +131,12 @@ Since we are using **MySQL** instead of PostgreSQL, the following adjustments ar
 - [ ] User role management (Admin, Accounts Officer, Director)
 - [ ] Permission-based access control
 - [ ] Audit trail (who recorded/modified payments)
-- [ ] Data backup and restore
+- [ ] Data backup and restore (MySQL dump)
 - [ ] System settings (fee structures, transport rates)
-- [ ] Database backup scheduling
+- [ ] Scheduled jobs (Node.js cron for transport billing)
 
 ### Phase 6: Parent Portal (Optional) - Weeks 17-20
-- [ ] Parent login to view child’s fee status
+- [ ] Parent login to view child fee status
 - [ ] Online payment integration (mobile money, bank)
 - [ ] Download fee statements
 - [ ] Receive notifications (SMS/Email)
@@ -132,58 +145,106 @@ Since we are using **MySQL** instead of PostgreSQL, the following adjustments ar
 
 ## Step 3: User Roles & Permissions
 
-| Role | Permissions |
-|------|-------------|
-| **Admin** | Full access: all features, user management, system settings, data export/delete, audit log access |
-| **Accounts Officer** | Record payments, view reports, search students, print receipts, add comments, void payments (with reason) |
-| **Director/Madam** | Approve discounts, view all reports, manage promotions, override payments, approve write-offs |
-| **Reception/Secretary** | Search students, view payment status only (read-only), add basic comments |
-| **Parent** | View own children’s fee status, payment history, download statements (read-only) |
+| Role | Permissions | Use Case |
+|------|-------------|----------|
+| **Admin** | Full access: all features, user management, system settings, data export/delete, audit log access | System administrator, IT staff |
+| **Accounts Officer** | Record payments, view reports, search students, print receipts, add comments, void payments (with reason) | Daily fee collection, receipt issuance |
+| **Director/Madam** | Approve discounts, view all reports, manage promotions, override payments, approve write-offs | Oversight, approvals, strategic decisions |
+| **Reception/Secretary** | Search students, view payment status only (read-only), add basic comments | Front desk inquiries |
+| **Parent** | View own children fee status, payment history, download statements (read-only) | Remote monitoring (Phase 6) |
 
 ---
 
-## Step 4: UI / UX Design (Powered by Ant Design)
+## Step 4: UI/UX Design Guidelines
 
-### Design Philosophy
-- **Speed:** Minimal clicks for daily operations (especially Payment Entry).
-- **Cleanliness:** Professional dashboard look using **Ant Design** components.
-- **Performance:** Paginated tables for large student datasets.
-- **Dashboard Layout:** 
-  - **Sidebar:** Navigation menu.
-  - **Topbar:** Quick stats, user profile, and search.
-  - **Main Content:** Dynamic page area.
+### Design Principles
+- **Fast**: Data-heavy system must load quickly (paginated tables, lazy loading)
+- **Clean**: Professional look with Ant Design components
+- **Easy to use**: Minimal clicks for daily tasks (especially payment entry)
 
-### Key Screens & Components
-| Screen | Purpose | Key AntD Components | Priority |
-|--------|--------|----------------------|----------|
-| Login/Auth | User authentication | `Form`, `Input`, `Button` | Phase 1 |
-| Dashboard | Quick stats: collections, outstanding, alerts | `Card`, `Statistic`, `List` | Phase 1 |
-| Student Registration | Add new student with guardian details | `Steps`, `Form`, `Select` | Phase 1 |
-| Student List | Search/filter students (Class, Term, Status) | `Table` (Paginated), `Input.Search` | Phase 1 |
-| Student Profile | Tabs for Overview, Payments, Debt, Transport, Inventory, Comments | `Tabs`, `Descriptions`, `Timeline` | Phase 2 |
-| Payment Entry | FAST entry: Student search + Auto-fill balance + Allocation preview | `AutoComplete`, `Modal`, `Table` | Phase 1 |
-| Receipt Print | Printable receipt with branding | `Typography`, `Table` | Phase 2 |
-| Settings | Fee structures, terms, system users | `Table`, `Modal`, `Switch` | Phase 5 |
+### Layout Structure
+```
++-----------------------------------------+
+|  Sidebar    |  Topbar (User + Stats)    |
+|  (Nav)      +---------------------------+
+|             |  Main Content Area        |
+|  - Dashboard|  (Tables, Forms, Cards)   |
+|  - Students |                           |
+|  - Payments |                           |
+|  - Reports  |                           |
+|  - Settings |                           |
++-------------+---------------------------+
+```
+
+### Key Screens Design
+
+#### 1. Student List Page
+- **Table columns**: Name, Class, Balance, Status, Actions
+- **Filters**: Class dropdown, Term dropdown, Search bar (name/ID)
+- **Features**: Paginated (20-50 per page), sortable columns, quick view
+
+#### 2. Student Profile Page (CORE SCREEN)
+- **Tab structure**:
+  - Overview (basic info, photo, guardian)
+  - Payments (history table, add payment button)
+  - Debt (outstanding balance, due dates)
+  - Transport (status, rate, history)
+  - Inventory (reams, files, uniforms - fulfilled/pending)
+  - Comments (notes timeline)
+
+#### 3. Payment Entry (CRITICAL - Used Daily)
+- **Must be FAST** (target: < 30 seconds per transaction)
+- **Minimal clicks** (auto-fill where possible)
+- **Components**:
+  - Student search (autocomplete)
+  - Auto-display current balance
+  - Amount input
+  - Payment method dropdown
+  - Allocation preview (how payment will be split)
+  - Submit button
+  - Print receipt option (immediate)
+
+#### 4. Dashboard Widgets
+- Total students (by class)
+- Today collections (amount + count)
+- Outstanding balance (total)
+- Alerts (debts overdue, low inventory)
+- Quick actions (Add Student, Record Payment)
+
+### Ant Design Components to Use
+| Component | Use Case |
+|-----------|----------|
+| Table | Student lists, payment history, reports |
+| Form + Input | Data entry forms |
+| Modal | Quick views, confirmations |
+| Tabs | Student profile sections |
+| Card | Dashboard widgets |
+| Select | Dropdowns (class, term, method) |
+| DatePicker | Date inputs |
+| Badge | Status indicators (Paid/Unpaid) |
+| Tag | Labels (NEW, PROMOTED, SPONSORED) |
+| Menu | Sidebar navigation |
+| Layout | Page structure |
 
 ---
 
 ## Step 5: Reports Specification
 
-| Report Name | Filters | Output Format | Frequency |
-|-------------|---------|---------------|----------|
-| Daily Collections | Date range, payment method, recorded_by | PDF, Excel | Daily |
-| Outstanding Balances | Class, term, student, balance range | PDF, Excel | Weekly |
-| Transport Revenue | Term, vehicle route, status | PDF, Excel | Monthly |
-| Debtors List | Due date, class, amount owed | PDF, Excel | Weekly |
-| Student Ledger | Student ID, term | PDF (printable) | On-demand |
-| Family Summary | Family name, term | PDF, Excel | On-demand |
-| Term Comparison | Term 1 vs Term 2 vs Term 3 | PDF, Excel | End-of-term |
-| Fee Collection by Class | Class, term, fee type | PDF, Excel | Monthly |
-| Inventory Usage | Item type, term, status | PDF, Excel | Monthly |
-| Audit Log | User, date range, action type | PDF, Excel | On-demand |
-| New Admissions | Term, class, date range | PDF, Excel | Monthly |
-| Promotions Report | Academic year, from/to class | PDF, Excel | End-of-term |
-| Voided Transactions | User, date range, reason | PDF, Excel | On-demand |
+| Report Name | Filters | Output Format | Frequency | Primary User |
+|-------------|---------|---------------|----------|-------------|
+| Daily Collections | Date range, payment method, recorded_by | PDF, Excel | Daily | Accounts |
+| Outstanding Balances | Class, term, student, balance range | PDF, Excel | Weekly | Director |
+| Transport Revenue | Term, vehicle route, status | PDF, Excel | Monthly | Director |
+| Debtors List | Due date, class, amount owed | PDF, Excel | Weekly | Accounts |
+| Student Ledger | Student ID, term | PDF (printable) | On-demand | Accounts/Parent |
+| Family Summary | Family name, term | PDF, Excel | On-demand | Accounts |
+| Term Comparison | Term 1 vs Term 2 vs Term 3 | PDF, Excel | End-of-term | Director |
+| Fee Collection by Class | Class, term, fee type | PDF, Excel | Monthly | Director |
+| Inventory Usage | Item type, term, status | PDF, Excel | Monthly | Admin |
+| Audit Log | User, date range, action type | PDF, Excel | On-demand | Admin/Director |
+| New Admissions | Term, class, date range | PDF, Excel | Monthly | Director |
+| Promotions Report | Academic year, from/to class | PDF, Excel | End-of-term | Director |
+| Voided Transactions | User, date range, reason | PDF, Excel | On-demand | Director |
 
 ---
 
@@ -194,9 +255,9 @@ Since we are using **MySQL** instead of PostgreSQL, the following adjustments ar
 |-------|----------------|---------------|
 | Admission No | Unique, auto-generated format: ADM-YYYY-### | "Admission number must be unique" |
 | ID Pass No | Unique per term, format: ### or ###/N/YY for re-issues | "ID Pass number already exists" |
-| Phone Numbers | Valid Tanzanian format (+255 or 0开头, 10-15 digits) | "Invalid phone number format" |
+| Phone Numbers | Valid Tanzanian format (+255 or 0, 10-15 digits) | "Invalid phone number format" |
 | Email | Valid email format (optional field) | "Invalid email format" |
-| Amounts | Positive numbers, max 2 decimal places, max 10,000,000 | "Amount must be between 0 and 10,000,000 TZS" |
+| Amounts | Positive integers, max 10,000,000 TZS | "Amount must be between 0 and 10,000,000 TZS" |
 | Payment Date | Cannot be future date, cannot be before term start | "Payment date must be within term dates" |
 | Receipt No | Auto-incremented, unique per academic year | "Receipt number generation failed" |
 | Student Name | 2-100 characters, alphabetic with spaces | "Name must be 2-100 characters" |
@@ -204,12 +265,12 @@ Since we are using **MySQL** instead of PostgreSQL, the following adjustments ar
 
 ### Business Rules
 1. **Payment Deadlines**: Each term has a fee deadline; overdue = debt record created automatically
-2. **ID Re-issue**: Format `###/1/26` indicates re-issue count and year; tracked in SystemLog
+2. **ID Re-issue**: Format `###/1/26` indicates re-issue count and year; tracked in system_logs
 3. **Family Discounts**: Applied at family level, not per student; cannot exceed 50% of total fees
-4. **Transport**: Billed monthly on the 1st; can start/stop independently of tuition; minimum 1 month commitment
-5. **Promotions**: Student history must be preserved when changing classes; promotion requires minimum fee clearance
+4. **Transport**: Billed monthly on the 1st via Node.js cron job; can start/stop independently of tuition; minimum 1 month commitment
+5. **Promotions**: Student history must be preserved when changing classes; promotion requires minimum fee clearance (70%)
 6. **Receipt Numbers**: Sequential, unique per academic year; cannot be reused even if voided
-7. **Currency**: All amounts in Tanzanian Shillings (TZS); no multi-currency support
+7. **Currency**: All amounts in Tanzanian Shillings (TZS); integers only (no decimals)
 8. **Duplicate Prevention**: No duplicate admission numbers or ID pass numbers; checked before save
 9. **Minimum Payment**: Term fee must be at least 50% paid to sit for exams (configurable by Director)
 10. **Promotion Eligibility**: Student must have cleared minimum 70% balance to be promoted (configurable)
@@ -218,49 +279,7 @@ Since we are using **MySQL** instead of PostgreSQL, the following adjustments ar
 13. **Allocation Priority**: Payments allocated in order: Oldest Debt → Current Tuition → Transport → Stationery
 14. **Material Tracking**: "Reams" and "Files" tracked as fulfilled/pending separately from cash balance
 
----
-
-## Step 7: Data Migration Plan
-
-### From Existing Document
-| Data Element | Source Format | Target Field | Transformation |
-|--------------|---------------|--------------|----------------|
-| Student Name | Text column | Student.name | Trim whitespace, title case |
-| Gender | M/F | Student.gender | Validate M/F only |
-| Annual Fee | Numeric | StudentFee.total_amount | Parse, remove commas |
-| Balance Jan 2026 | Numeric | DebtRecord.amount_owed | Parse, create debt record |
-| April Payment | Numeric | Payment.amount | Parse, create payment record |
-| ID Pass No | Text | Student.id_pass_no | Store as-is, validate uniqueness |
-| Comments | Text | Comment.comment_text | Link to student, preserve text |
-| Transport Rate | Text (extract numeric) | Transport.monthly_rate | Parse "@35,000 PM" → 35000 |
-| Family Discount | Text note | Family.discount_amount | Parse "DISCOUNT OF 265,000" |
-| Class | Section header | Student.class_id | Map "Baby Class" → class_id |
-| Term | Document title | AcademicTerm.name | "2ND TERM" → "2nd" |
-
-### Migration Steps
-1. **Parse** existing Word document to structured data (Excel/CSV intermediate)
-2. **Clean** data (remove duplicates, standardize formats, validate phone numbers)
-3. **Import** to staging tables with validation flags
-4. **Validate** relationships (guardian → student, class assignments, fee structures)
-5. **Migrate** to production tables with transaction rollback on error
-6. **Verify** counts and spot-check records (minimum 10% sample)
-7. **Generate** migration report with discrepancies for manual review
-
-### Migration Validation Queries
-```sql
--- Verify student count matches document
-SELECT COUNT(*) FROM students WHERE academic_year_id = 2026;
-
--- Verify total fees collected matches
-SELECT SUM(amount) FROM payments WHERE term_id = '2nd_term_2026';
-
--- Verify debt records created for balances
-SELECT COUNT(*) FROM debt_records WHERE amount_owed > 0;
-```
-
----
-
-## Step 8: Glossary of Terms
+Glossary of Terms
 
 | Term | Definition | Example |
 |------|------------|--------|
@@ -297,161 +316,3 @@ SELECT COUNT(*) FROM debt_records WHERE amount_owed > 0;
 | **Uptime** | 99% availability during school hours (7 AM - 6 PM) | Monitoring with alerts for downtime > 5 minutes |
 
 ---
-
-## Step 10: Technology Stack
-
-### Frontend
-| Technology | Purpose | Version |
-|------------|---------|--------|
-| React | UI framework | 18+ |
-| TypeScript | Type safety | 5+ |
-| Ant Design | Component library | Latest |
-| React Query | Server state management | 4+ |
-| Zustand | Client state management | 4+ |
-| React Hook Form | Form handling | 7+ |
-| Zod | Schema validation | 3+ |
-| react-pdf | PDF generation | Latest |
-| Axios | HTTP client | 1+ |
-
-### Backend
-| Technology | Purpose | Version |
-|------------|---------|--------|
-| Node.js | Runtime | 20+ |
-| Express | Web framework | Latest |
-| Prisma | ORM (MySQL) | Latest |
-| Zod | Validation | Latest |
-| jsonwebtoken | Authentication | Latest |
-| bcrypt | Password hashing | 5+ |
-| node-cron | Scheduled jobs | Latest |
-
-### Database
-| Technology | Purpose | Version |
-|------------|---------|--------|
-| MySQL | Primary database | 8.0+ |
-| Docker | Local containerization (Option B) | Latest |
-
-### DevOps
-| Technology | Purpose | Version |
-|------------|---------|--------|
-| Git | Version control | Latest |
-| GitHub | Repository hosting | - |
-| PWA | Offline support | Latest |
-
----
-
-## Step 11: API Design
-(Rest of API Design remains similar but with MySQL-optimized queries via Prisma)
-
----
-
-## Step 14: Current Status & Next Actions
-
-### Current Phase: Research & Planning
-- [x] Analyze existing account document.
-- [x] Document full system requirements.
-- [x] Define validation rules and business logic.
-- [x] Create data migration plan.
-- [x] Adopt MySQL + Prisma + Ant Design Stack.
-- [ ] Initialize Project with `npx prisma init` - **NEXT**
-- [ ] Define Prisma Schema (`schema.prisma`) - **NEXT**
-- [ ] Setup Local MySQL Database/Docker - **NEXT**
-
-### Strategic Recommendations (The "YOLO" Advice)
-1. **Launch Early:** Focus 100% on Phase 1 (Registration + Payments).
-2. **Local First:** Run on MySQL locally for zero-latency in school environment.
-3. **Professional Feel:** Use Ant Design defaults for a high-end "SaaS" look.
-4. **Clean Code:** Use Prisma to keep the database logic simple and typed.
-
-### Immediate Next Steps
-1. **Setup project repository** with folder structure:
-   ```
-   school-system/
-   ├── prisma/
-   │   └── schema.prisma
-   ├── backend/
-   │   ├── src/
-   │   │   ├── controllers/
-   │   │   ├── routes/
-   │   │   └── middleware/
-   │   └── package.json
-   ├── frontend/
-   │   ├── src/
-   │   │   ├── components/
-   │   │   ├── pages/
-   │   │   └── hooks/
-   │   └── package.json
-   ├── docs/
-   │   └── PROJECT_STATUS.md
-   └── README.md
-   ```
-2. **Initialize Prisma** with MySQL connector.
-3. **Begin Phase 1 development.**
-
----
-
-## Appendix A: Sample Data
-
-### Sample Student Record
-```json
-{
-  "admission_no": "ADM-2026-001",
-  "id_pass_no": "411",
-  "name": "Amaira Ramadhan Mapalala",
-  "gender": "F",
-  "class_id": "baby-class",
-  "guardian_id": "guardian-001",
-  "status": "active",
-  "fees": {
-    "annual": 665000,
-    "stationery": "1 REAM",
-    "paid_jan": 165000,
-    "paid_april": 150000,
-    "balance": 350000
-  }
-}
-```
-
-### Sample Payment Record
-```json
-{
-  "student_id": "student-001",
-  "amount": 150000,
-  "payment_date": "2026-04-08",
-  "payment_method": "cash",
-  "receipt_no": "RCP-2026-001",
-  "term_id": "2nd-term-2026",
-  "recorded_by": "user-001",
-  "allocations": [
-    { "fee_type": "debt", "amount": 165000 },
-    { "fee_type": "tuition", "amount": 0 },
-    { "fee_type": "transport", "amount": 0 }
-  ],
-  "notes": "Partial payment for 2nd term"
-}
-```
-
----
-
-## Appendix B: Risk Register
-
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| Data loss during migration | High | Medium | Full backup before migration; parallel run for 1 week |
-| User resistance to new system | Medium | High | Training sessions; simple UI; phased rollout |
-| Internet connectivity issues | High | Medium | Offline-first PWA; local caching; sync on reconnect |
-| Scope creep | Medium | High | Strict phase boundaries; change request process |
-| Budget overrun | Medium | Medium | Fixed-price phases; prioritize MVP features |
-
----
-
-## Appendix C: Change Log
-
-| Date | Version | Author | Changes |
-|------|---------|--------|--------|
-| 2026-04-14 | 1.0 | Project Team | Initial comprehensive requirements document |
-
----
-
-**Document Status:** Ready for Development  
-**Next Review:** After Phase 1 completion  
-**Stakeholders:** School Director, Accounts Officer, Development Team
