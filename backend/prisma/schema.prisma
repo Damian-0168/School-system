@@ -1,7 +1,7 @@
 ﻿// Prisma Schema for Dominion School Management System
 // Database: MySQL 8.0+
 // ORM: Prisma
-// Version: 2.0 - With enums, relations, indices, and audit improvements
+// Version: 3.0 - Final with enums, relations, indices, and proper delete behaviors
 
 generator client {
   provider = "prisma-client-js"
@@ -81,6 +81,21 @@ enum NotificationStatus {
   FAILED
 }
 
+enum DiscountType {
+  FIXED
+  PERCENTAGE
+}
+
+enum AllocationType {
+  DEBT
+  TUITION
+  TRANSPORT
+  STATIONERY
+  ID
+  EXAM
+  OTHER
+}
+
 // ==================== ACADEMIC STRUCTURE ====================
 
 /// Academic year (e.g., 2026)
@@ -108,7 +123,7 @@ model AcademicTerm {
   startDate     DateTime        @db.Date
   endDate       DateTime        @db.Date
   isActive      Boolean         @default(false)
-  academicYear  AcademicYear    @relation(fields: [academicYearId], references: [id])
+  academicYear  AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   studentFees   StudentFee[]
   feeStructures FeeStructure[]
   payments      Payment[]
@@ -158,13 +173,13 @@ model FeeType {
 
 /// Family grouping for sibling discounts
 model Family {
-  id            BigInt      @id @default(autoincrement())
+  id            BigInt       @id @default(autoincrement())
   familyName    String
   discountAmount Int
-  discountType  String      // "fixed" or "percentage"
+  discountType  DiscountType @default(FIXED) // FIXED or PERCENTAGE
   guardians     Guardian[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@map("families")
 }
@@ -178,7 +193,7 @@ model Guardian {
   address          String?
   alternateContact String?
   familyId         BigInt?
-  family           Family?     @relation(fields: [familyId], references: [id])
+  family           Family?     @relation(fields: [familyId], references: [id], onDelete: SetNull)
   students         Student[]
   notifications    Notification[]
   createdAt        DateTime    @default(now())
@@ -202,9 +217,9 @@ model Student {
   familyId      BigInt?
   status        StudentStatus       @default(ACTIVE)
   photoPath     String?
-  deletedAt     DateTime?           // Soft delete support
-  class         Class               @relation(fields: [classId], references: [id])
-  guardian      Guardian            @relation(fields: [guardianId], references: [id])
+  deletedAt     DateTime?           // Soft delete support (Student only)
+  class         Class               @relation(fields: [classId], references: [id], onDelete: Restrict)
+  guardian      Guardian            @relation(fields: [guardianId], references: [id], onDelete: Restrict)
   fees          StudentFee[]
   payments      Payment[]
   transport     Transport?
@@ -218,8 +233,6 @@ model Student {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
-  @@index([admissionNo])
-  @@index([idPassNo])
   @@index([classId])
   @@index([guardianId])
   @@index([status])
@@ -235,7 +248,7 @@ model User {
   role          UserRole
   passwordHash  String
   lastLogin     DateTime?
-  deletedAt     DateTime?     // Soft delete support
+  deletedAt     DateTime?     // Soft delete support (User only)
   payments      Payment[]     @relation("RecordedBy")
   receipts      Receipt[]     @relation("IssuedBy")
   comments      Comment[]
@@ -254,10 +267,10 @@ model FeeStructure {
   classId         BigInt
   academicTermId  BigInt
   feeTypeId       BigInt
-  feeType         FeeType       @relation(fields: [feeTypeId], references: [id])
+  feeType         FeeType       @relation(fields: [feeTypeId], references: [id], onDelete: Restrict)
   amount          Int
-  class           Class         @relation(fields: [classId], references: [id])
-  academicTerm    AcademicTerm  @relation(fields: [academicTermId], references: [id])
+  class           Class         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  academicTerm    AcademicTerm  @relation(fields: [academicTermId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -275,8 +288,8 @@ model StudentFee {
   netAmount       Int
   isSponsored     Boolean       @default(false)
   sponsorName     String?
-  student         Student       @relation(fields: [studentId], references: [id])
-  academicTerm    AcademicTerm  @relation(fields: [academicTermId], references: [id])
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicTerm    AcademicTerm  @relation(fields: [academicTermId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -284,7 +297,7 @@ model StudentFee {
   @@map("student_fees")
 }
 
-/// Payment records
+/// Payment records - NO soft delete, use VOIDED status for audit trail
 model Payment {
   id            BigInt              @id @default(autoincrement())
   studentId     BigInt
@@ -298,12 +311,11 @@ model Payment {
   notes         String?             @db.Text
   status        PaymentStatus       @default(ACTIVE)
   voidReason    String?             @db.Text
-  deletedAt     DateTime?           // Soft delete support
   allocations   PaymentAllocation[]
   receipt       Receipt?
-  student       Student             @relation(fields: [studentId], references: [id])
-  academicTerm  AcademicTerm        @relation(fields: [termId], references: [id])
-  recordedByUser User              @relation(fields: [recordedBy], references: [id])
+  student       Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicTerm  AcademicTerm        @relation(fields: [termId], references: [id], onDelete: Restrict)
+  recordedByUser User              @relation(fields: [recordedBy], references: [id], onDelete: Restrict)
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
@@ -311,6 +323,7 @@ model Payment {
   @@index([paymentDate])
   @@index([receiptNo])
   @@index([status])
+  @@index([studentId, paymentDate]) // Composite index for date range queries
   @@map("payments")
 }
 
@@ -318,10 +331,10 @@ model Payment {
 model PaymentAllocation {
   id              BigInt        @id @default(autoincrement())
   paymentId       BigInt
-  feeType         String        // debt, tuition, transport, stationery
+  feeType         AllocationType
   amountAllocated Int
   termId          BigInt
-  payment         Payment       @relation(fields: [paymentId], references: [id])
+  payment         Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -339,10 +352,10 @@ model Receipt {
   issuedDate     DateTime     @db.Date
   issuedBy       BigInt
   pdfPath        String?
-  student        Student      @relation(fields: [studentId], references: [id])
-  payment        Payment      @relation(fields: [paymentId], references: [id])
-  issuedByUser   User         @relation(fields: [issuedBy], references: [id])
-  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  payment        Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  issuedByUser   User         @relation(fields: [issuedBy], references: [id], onDelete: Restrict)
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -359,8 +372,8 @@ model DebtRecord {
   dueDate       DateTime      @db.Date
   status        DebtStatus    @default(PENDING)
   notes         String?       @db.Text
-  student       Student       @relation(fields: [studentId], references: [id])
-  academicTerm  AcademicTerm  @relation(fields: [termId], references: [id])
+  student       Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicTerm  AcademicTerm  @relation(fields: [termId], references: [id], onDelete: Cascade)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -381,7 +394,7 @@ model Transport {
   endTermId     BigInt?
   status        TransportStatus @default(ACTIVE)
   vehicleDetails String?
-  student       Student        @relation(fields: [studentId], references: [id])
+  student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -413,8 +426,8 @@ model StudentInventory {
   termId      BigInt
   isPaid      Boolean          @default(false)
   status      InventoryStatus  @default(PENDING)
-  student     Student          @relation(fields: [studentId], references: [id])
-  item        InventoryItem    @relation(fields: [itemId], references: [id])
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  item        InventoryItem    @relation(fields: [itemId], references: [id], onDelete: Restrict)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -432,10 +445,10 @@ model Promotion {
   toClassId       BigInt
   promotionDate   DateTime      @db.Date
   academicYearId  BigInt
-  student         Student       @relation(fields: [studentId], references: [id])
-  fromClass       Class         @relation("FromClass", fields: [fromClassId], references: [id])
-  toClass         Class         @relation("ToClass", fields: [toClassId], references: [id])
-  academicYear    AcademicYear  @relation(fields: [academicYearId], references: [id])
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fromClass       Class         @relation("FromClass", fields: [fromClassId], references: [id], onDelete: Restrict)
+  toClass         Class         @relation("ToClass", fields: [toClassId], references: [id], onDelete: Restrict)
+  academicYear    AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
 
   @@map("promotions")
@@ -449,8 +462,8 @@ model Comment {
   studentId   BigInt
   commentText String      @db.Text
   createdBy   BigInt
-  student     Student     @relation(fields: [studentId], references: [id])
-  createdByUser User      @relation(fields: [createdBy], references: [id])
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdByUser User      @relation(fields: [createdBy], references: [id], onDelete: Restrict)
   createdAt   DateTime    @default(now())
 
   @@index([studentId])
@@ -466,7 +479,7 @@ model SystemLog {
   entityId    BigInt
   timestamp   DateTime    @default(now())
   details     Json?
-  user        User        @relation(fields: [userId], references: [id])
+  user        User        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([timestamp])
@@ -483,8 +496,8 @@ model Notification {
   channel    NotificationChannel
   status     NotificationStatus @default(PENDING)
   sentAt     DateTime?
-  student    Student?           @relation(fields: [studentId], references: [id])
-  guardian   Guardian?          @relation(fields: [guardianId], references: [id])
+  student    Student?           @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  guardian   Guardian?          @relation(fields: [guardianId], references: [id], onDelete: SetNull)
   createdAt  DateTime           @default(now())
 
   @@index([studentId])
