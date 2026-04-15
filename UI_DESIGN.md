@@ -52,7 +52,7 @@ This document contains detailed UI/UX designs for the Dominion School Management
 +------------------------------------------------------------------+
 |  SIDEBAR (256px)           |  TOPBAR (64px)                      |
 |  +-------------------+     |  +--------------------------------+ |
-|  | [LOGO]            |     |  | [Search]  [Notifications] [User] |
+|  | [LOGO]            |     |  | [Search]  [Sync Status] [Notif] [User] |
 |  | Dominion School   |     |  +--------------------------------+ |
 |  +-------------------+     +------------------------------------+
 |  | Dashboard         |     |  MAIN CONTENT AREA                  |
@@ -83,6 +83,7 @@ This document contains detailed UI/UX designs for the Dominion School Management
 - Collapses to icons only on tablet (768px)
 - Hamburger menu on mobile (< 768px)
 - Active item highlighted with blue background
+- **Sync Status**: Visual indicator (Cloud icon) in topbar showing if local data is synced to server.
 
 ---
 
@@ -183,7 +184,7 @@ Fast search, filtering, and access to student profiles.
 |                                                                   |
 |  Showing 1-20 of 350    < 1 2 3 4 5 ... 18 >                     |
 |                                                                   |
-|  [Select All] [Export Selected] [Bulk Payment]                   |
+|  [Select All] [Export Selected] [Bulk Payment] [Bulk SMS/Remind]  |
 +------------------------------------------------------------------+
 ```
 
@@ -327,11 +328,11 @@ Complete student view - all information, all actions in one place.
 |  INVENTORY / STATIONERY                           [Add Item]      |
 +------------------------------------------------------------------+
 |  +-----------------------------------------------------------+    |
-|  | Item    | Qty | Cost       | Status   | Actions            |    |
-|  |---------|-----|------------|----------|-------------------|    |
-|  | Ream    | 1   | 10,000 TZS | Pending  | [Fulfill]         |    |
-|  | File    | 1   | 3,500 TZS  | Paid     | [View]            |    |
-|  | Uniform | 1   | 25,000 TZS | Issued   | [View]            |    |
+|  | Item    | Qty | Cost       | Status       | Actions        |    |
+|  |---------|-----|------------|--------------|----------------|    |
+|  | Ream    | 1   | 10,000 TZS | [pkg] Pend   | [Fulfill]      |    |
+|  | File    | 1   | 3,500 TZS  | [chk] Paid   | [View]         |    |
+|  | Uniform | 1   | 25,000 TZS | [user] Issued| [View]         |    |
 |  +-----------------------------------------------------------+    |
 +------------------------------------------------------------------+
 ```
@@ -433,6 +434,7 @@ Fast, error-free payment recording - the most used feature.
 3. **Recent students:** Quick-select from last 5 students paid
 4. **Validation:** Real-time inline validation
 5. **Offline mode:** Queue payment if offline, sync when online
+6. **Keyboard-Driven Entry:** Logical `tabIndex` order ensures full keyboard-only recording (Search → Amount → Submit).
 
 ---
 
@@ -495,6 +497,7 @@ Clean, professional receipt for parents.
 - Amount in words + numbers
 - Allocation breakdown shown
 - Print-optimized (no colors, clean layout)
+- **Print Context Toggle:** Quick switch between 'Copy for School' and 'Copy for Parent' versions.
 
 ---
 
