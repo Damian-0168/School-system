@@ -14,7 +14,7 @@ Dominion School Management System - A comprehensive fee tracking and student man
 school-system/
 ├── backend/
 │   ├── prisma/
-│   │   └── schema.prisma      # Database schema & models
+│   │   └── schema.prisma      # Database schema (22 models, 12 enums)
 │   ├── src/
 │   │   ├── controllers/       # Request handlers
 │   │   ├── routes/            # API route definitions
@@ -34,7 +34,8 @@ school-system/
 │   └── Dockerfile
 ├── docker-compose.yml          # Local development setup
 └── docs/
-    └── PROJECT_STATUS.md       # Full requirements document
+    ├── PROJECT_STATUS.md       # Full requirements document
+    └── UI_DESIGN.md            # UI wireframes and specifications
 ```
 
 ---
@@ -43,14 +44,17 @@ school-system/
 
 ### Setup
 ```bash
-# Install dependencies
-npm install (both backend/ and frontend/)
+# Install dependencies (both backend/ and frontend/)
+npm install
 
 # Start local environment (MySQL + Backend)
 docker-compose up -d
 
 # Run Prisma migrations
 npx prisma migrate dev
+
+# Generate Prisma Client
+npx prisma generate
 ```
 
 ### Backend
@@ -152,6 +156,12 @@ chore: update Prisma dependency
 
 ## Database & Prisma
 
+### Schema Overview
+- **Models:** 22 (students, payments, fees, transport, inventory, etc.)
+- **Enums:** 12 (Gender, StudentStatus, UserRole, PaymentMethod, etc.)
+- **Soft Delete:** Student and User models only (deletedAt field)
+- **Audit Trail:** Payments use `VOIDED` status, never deleted
+
 ### Schema Changes
 ```bash
 # Edit prisma/schema.prisma
@@ -164,6 +174,14 @@ npx prisma generate
 ```bash
 npx prisma db seed
 ```
+
+### Important Relations
+| Relation | onDelete | Reason |
+|----------|----------|--------|
+| Guardian → Student | Restrict | Never orphan students |
+| Student → Payment | Restrict | Payments remain for audit |
+| Family → Guardian | SetNull | Family removed, guardian stays |
+| AcademicYear → Term | Cascade | Terms depend on year |
 
 ---
 
@@ -186,11 +204,25 @@ VITE_API_URL=http://localhost:5000/api
 
 ## Key Business Rules
 
-1. **Payments cannot be deleted** - only voided with reason (audit trail)
-2. **Currency:** Tanzanian Shillings (TZS), integers only
+1. **Payments cannot be deleted** - Only voided with reason (audit trail requirement)
+2. **Currency:** Tanzanian Shillings (TZS), integers only (no decimals)
 3. **Allocation priority:** Debt → Tuition → Transport → Stationery
-4. **Transport billing:** Automated monthly via cron (1st of each month)
-5. **Family discounts:** Applied at family level, max 50%
+4. **Transport billing:** Automated monthly via cron (1st of each month, configurable)
+5. **Family discounts:** Applied at family level, max 50%, FIXED or PERCENTAGE
+6. **Receipt numbers:** Unique per academic year (RCP-2026-001, RCP-2027-001)
+7. **Soft delete:** Only Student and User models (deletedAt field)
+8. **Student status:** ACTIVE, PROMOTED, or WITHDRAWN (enum)
+9. **Payment method:** CASH, MOBILE, or BANK (enum)
+10. **Gender:** M or F (enum, required)
+
+---
+
+## BigInt Serialization Note
+
+All primary keys use `BigInt` in Prisma. When sending to frontend:
+- Prisma automatically serializes BigInt to string in JSON responses
+- Frontend should treat IDs as strings (display, compare)
+- Never perform arithmetic on IDs
 
 ---
 
@@ -200,7 +232,20 @@ VITE_API_URL=http://localhost:5000/api
 2. Run `docker-compose up -d` (starts MySQL)
 3. Install dependencies: `npm install` (backend + frontend)
 4. Run migrations: `npx prisma migrate dev`
-5. Start dev servers: `npm run dev` (both directories)
-6. Access: Frontend `http://localhost:5173`, Backend `http://localhost:5000`
+5. Generate client: `npx prisma generate`
+6. Start dev servers: `npm run dev` (both directories)
+7. Access: Frontend `http://localhost:5173`, Backend `http://localhost:5000`
 
 For full requirements, see `docs/PROJECT_STATUS.md`.
+For UI specifications, see `docs/UI_DESIGN.md`.
+
+---
+
+## Documentation Files
+
+| File | Purpose |
+|------|--------|
+| `PROJECT_STATUS.md` | Full requirements, features, timeline, business rules |
+| `UI_DESIGN.md` | UI wireframes, Ant Design components, accessibility |
+| `backend/prisma/schema.prisma` | Database schema with all models and relations |
+| `AGENTS.md` | This file - contributor guidelines |

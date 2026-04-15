@@ -1,50 +1,68 @@
 # Project Overview: Dominion School Management System
 
-This repository contains the requirements, planning, and source data for the **Dominion School Management System**, a digitalization project for Dominion Pre & Primary School. The system is currently in the **Research & Planning** phase.
+This repository contains the comprehensive requirements, architectural planning, and source data for the **Dominion School Management System**, a high-speed digitalization project for Dominion Pre & Primary School in Tanzania.
 
 ## Current State
-- **Phase:** Phase 1 (Core Foundation) - Planning/Migration.
-- **Primary Objective:** Transitioning from manual, document-based fee tracking to a full-stack digital solution.
-- **Key Resources:** 
-    - `PROJECT_STATUS.md`: Full system requirements, business logic, and roadmap.
-    - `AGENTS.md`: Technical conventions, tech stack, and intended repository structure.
-    - `document_content.txt`: Raw data extracted from school account documents for migration.
+- **Phase:** Phase 1 (Core Foundation) - Ready for Development.
+- **Primary Objective:** Transitioning from manual, document-based fee tracking to a production-ready, local-first full-stack solution.
+- **Key Resources:**
+    - `PROJECT_STATUS.md`: Comprehensive roadmap, milestones, and strategic recommendations.
+    - `UI_DESIGN.md`: Detailed Ant Design wireframes, UX patterns, and dashboard layouts.
+    - `backend/prisma/schema.prisma`: Production-grade MySQL schema (v2.1) featuring Enums, Soft Deletes (Student/User), and composite indices.
+    - `AGENTS.md`: Technical conventions, coding standards, and repository guidelines.
+    - `document_content.txt`: Extracted source data for the initial migration.
 
-## Intended Technology Stack
-- **Frontend:** React (TypeScript) + Ant Design.
-- **Backend:** Node.js (Express).
-- **Database:** MySQL (Local or Dockerized) with **Prisma ORM**.
-- **Deployment:** Local-first with PWA support for offline capability.
+## Finalized Technology Stack
+- **Frontend:** React (Vite) + TypeScript + Ant Design.
+- **Backend:** Node.js (Express) + Prisma ORM.
+- **Database:** MySQL 8.0+ (Local/Dockerized).
+- **Communication:** Axios + TanStack Query (React Query).
+- **Offline Strategy:** Progressive Web App (PWA) + Local Sync Status.
 
-## Repository Structure (Planned)
+## Key Architectural Decisions
+- **Local-First:** Optimized for the Tanzanian school context; the system must run on a local server with zero latency for daily operations.
+- **Financial Integrity:** 
+    - **No Deletion of Payments:** Payments are only `VOIDED` (status) with an audit trail, never deleted from the database.
+    - **Soft Deletes:** Applied only to `Student` and `User` models to prevent accidental data loss while preserving historical logs.
+- **BigInt Handling:** IDs are stored as `BigInt`. The backend must implement a global JSON serializer to convert `BigInt` to `String` for frontend safety.
+- **Performance:** Composite indices (e.g., `[studentId, paymentDate]`) ensure fast lookups for student profiles and financial ledgers.
+
+## UI/UX Principles (from UI_DESIGN.md)
+- **Framework:** Ant Design defaults for a "SaaS-like" professional feel.
+- **Layout:** Sidebar (Navigation) + Topbar (Sync Status & Search) + Dynamic Content.
+- **Critical Flow:** Keyboard-driven "Fast Entry" for payments (Search → Amount → Submit).
+- **Feedback:** Visual status indicators (Icons) for inventory fulfillment and debt status (Green/Orange/Red).
+
+## Repository Structure (Ready for Scaffolding)
 ```
 school-system/
-├── prisma/
-│   └── schema.prisma      # Database schema
 ├── backend/
-│   ├── src/               # Express controllers, routes, middleware
+│   ├── prisma/
+│   │   └── schema.prisma      # Finalized Schema v2.1
+│   ├── src/                   # Express (Controller-Service-Repository)
+│   ├── docker-compose.yml     # Local MySQL container
 │   └── package.json
 ├── frontend/
-│   ├── src/               # React components, pages, hooks
+│   ├── src/                   # React + Ant Design
 │   └── package.json
-├── docs/
-│   └── PROJECT_STATUS.md  # Requirements & Timeline
-└── AGENTS.md              # Development guidelines
+├── docs/                      # PROJECT_STATUS.md, UI_DESIGN.md
+└── AGENTS.md                  # Development guidelines
 ```
 
-## Building and Running (Future)
-1. **Initialize Database:** `npx prisma init` and `npx prisma migrate dev`.
-2. **Setup Local Environment:** `docker-compose up -d`.
-3. **Frontend Dev:** `cd frontend && npm run dev`.
-4. **Backend Dev:** `cd backend && npm run dev`.
+## 🛠 Master Directive for Future AI Agents
+When initiating work on this project, the following prompt should be used to establish context:
 
-## Development Conventions (from AGENTS.md)
-- **Indentation:** 2 spaces.
-- **Naming:** kebab-case for files, PascalCase for components, camelCase for functions/variables.
-- **Rules:** No deletion of payments (void only), Tanzanian Shillings (TZS) only.
-- **Test-Driven:** Backend (Jest), Frontend (Vitest), E2E (Playwright).
+> Act as a Senior Full-Stack Engineer. This project is the **Dominion School Management System**.
+> 
+> **Core Mission:** Deliver Phase 1 MVP (Registration, Payments, Dashboard).
+> **Tech Stack:** React (TS) + AntD, Node (Express) + Prisma, MySQL.
+> **Constraints:** Handle BigInt serialization, implement soft-deletes (Student/User only), use `AllocationType` enum for payment logic, and ensure the "Sync Status" indicator is present in the Topbar.
+> **Design Source:** Strictly follow wireframes in `UI_DESIGN.md`.
+> **Database Source:** Strictly follow `schema.prisma`.
+> 
+> **Start by scaffolding the backend and frontend directories and initializing the Prisma Client.**
 
 ## Usage
-- Refer to `PROJECT_STATUS.md` for the current roadmap and business rules.
-- Refer to `AGENTS.md` for coding standards and PR guidelines.
-- Use `document_content.txt` as the source of truth for initial data migration scripts.
+- Refer to `PROJECT_STATUS.md` for current milestones and the "YOLO" strategic advice.
+- Refer to `UI_DESIGN.md` for specific component and ASCII wireframe layouts.
+- Use `document_content.txt` for the initial data migration scripts.
