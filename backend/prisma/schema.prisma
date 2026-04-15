@@ -1,6 +1,7 @@
 ﻿// Prisma Schema for Dominion School Management System
 // Database: MySQL 8.0+
 // ORM: Prisma
+// Version: 2.0 - With enums, relations, indices, and audit improvements
 
 generator client {
   provider = "prisma-client-js"
@@ -9,6 +10,75 @@ generator client {
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum Gender {
+  M
+  F
+}
+
+enum StudentStatus {
+  ACTIVE
+  PROMOTED
+  WITHDRAWN
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNTS
+  DIRECTOR
+  RECEPTION
+}
+
+enum FeeTypeEnum {
+  TUITION
+  TRANSPORT
+  STATIONERY
+  ID
+  EXAM
+  LIBRARY
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE
+  BANK
+}
+
+enum PaymentStatus {
+  ACTIVE
+  VOIDED
+}
+
+enum DebtStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum InventoryStatus {
+  PENDING
+  FULFILLED
+  ISSUED
+}
+
+enum TransportStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 // ==================== ACADEMIC STRUCTURE ====================
@@ -22,8 +92,11 @@ model AcademicYear {
   isActive   Boolean         @default(false)
   terms      AcademicTerm[]
   promotions Promotion[]
+  receipts   Receipt[]
   createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
+  @@index([isActive])
   @@map("academic_years")
 }
 
@@ -41,8 +114,10 @@ model AcademicTerm {
   payments      Payment[]
   debtRecords   DebtRecord[]
   createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   @@unique([academicYearId, name])
+  @@index([isActive])
   @@map("academic_terms")
 }
 
@@ -50,6 +125,7 @@ model AcademicTerm {
 model Class {
   id              BigInt      @id @default(autoincrement())
   name            String      @unique // "Baby Class", "Middle Class"
+  sortOrder       Int         @default(0) // For custom ordering in dropdowns
   termFee         Int         // Fee per term in TZS
   annualFee       Int         // Full year fee in TZS
   students        Student[]
@@ -57,8 +133,25 @@ model Class {
   fromPromotions  Promotion[] @relation("FromClass")
   toPromotions    Promotion[] @relation("ToClass")
   createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
+  @@index([sortOrder])
   @@map("classes")
+}
+
+// ==================== FEE TYPES (LOOKUP) ====================
+
+/// Fee type lookup table for flexible fee categories
+model FeeType {
+  id          BigInt           @id @default(autoincrement())
+  name        String           @unique // "Tuition", "Transport", "Exam Fee"
+  description String?          @db.Text
+  isActive    Boolean          @default(true)
+  structures  FeeStructure[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("fee_types")
 }
 
 // ==================== PEOPLE ====================
@@ -71,6 +164,7 @@ model Family {
   discountType  String      // "fixed" or "percentage"
   guardians     Guardian[]
   createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@map("families")
 }
@@ -86,8 +180,12 @@ model Guardian {
   familyId         BigInt?
   family           Family?     @relation(fields: [familyId], references: [id])
   students         Student[]
+  notifications    Notification[]
   createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
+  @@index([phone])
+  @@index([familyId])
   @@map("guardians")
 }
 
@@ -97,13 +195,14 @@ model Student {
   admissionNo   String              @unique // ADM-YYYY-###
   idPassNo      String?             // ID pass number (searchable)
   name          String
-  gender        String              // "M" or "F"
+  gender        Gender
   dateOfBirth   DateTime?           @db.Date
   classId       BigInt
   guardianId    BigInt
   familyId      BigInt?
-  status        String              @default("active") // active, promoted, withdrawn
+  status        StudentStatus       @default(ACTIVE)
   photoPath     String?
+  deletedAt     DateTime?           // Soft delete support
   class         Class               @relation(fields: [classId], references: [id])
   guardian      Guardian            @relation(fields: [guardianId], references: [id])
   fees          StudentFee[]
@@ -123,6 +222,8 @@ model Student {
   @@index([idPassNo])
   @@index([classId])
   @@index([guardianId])
+  @@index([status])
+  @@index([deletedAt])
   @@map("students")
 }
 
@@ -131,14 +232,16 @@ model User {
   id            BigInt        @id @default(autoincrement())
   name          String
   email         String        @unique
-  role          String        // admin, accounts, director, reception
+  role          UserRole
   passwordHash  String
   lastLogin     DateTime?
+  deletedAt     DateTime?     // Soft delete support
   payments      Payment[]     @relation("RecordedBy")
   receipts      Receipt[]     @relation("IssuedBy")
   comments      Comment[]
   systemLogs    SystemLog[]
   createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@map("users")
 }
@@ -150,13 +253,15 @@ model FeeStructure {
   id              BigInt        @id @default(autoincrement())
   classId         BigInt
   academicTermId  BigInt
-  feeType         String        // tuition, transport, stationery, id
+  feeTypeId       BigInt
+  feeType         FeeType       @relation(fields: [feeTypeId], references: [id])
   amount          Int
   class           Class         @relation(fields: [classId], references: [id])
   academicTerm    AcademicTerm  @relation(fields: [academicTermId], references: [id])
   createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  @@unique([classId, academicTermId, feeType])
+  @@unique([classId, academicTermId, feeTypeId])
   @@map("fee_structures")
 }
 
@@ -173,6 +278,7 @@ model StudentFee {
   student         Student       @relation(fields: [studentId], references: [id])
   academicTerm    AcademicTerm  @relation(fields: [academicTermId], references: [id])
   createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@unique([studentId, academicTermId])
   @@map("student_fees")
@@ -183,24 +289,28 @@ model Payment {
   id            BigInt              @id @default(autoincrement())
   studentId     BigInt
   amount        Int
+  allocatedAmount Int             @default(0) // Sum of allocations for validation
   paymentDate   DateTime            @db.Date
-  paymentMethod String              // cash, mobile, bank
+  paymentMethod PaymentMethod
   receiptNo     String              // Unique per year
   termId        BigInt
   recordedBy    BigInt
   notes         String?             @db.Text
-  status        String              @default("active") // active, voided
+  status        PaymentStatus       @default(ACTIVE)
   voidReason    String?             @db.Text
+  deletedAt     DateTime?           // Soft delete support
   allocations   PaymentAllocation[]
   receipt       Receipt?
   student       Student             @relation(fields: [studentId], references: [id])
   academicTerm  AcademicTerm        @relation(fields: [termId], references: [id])
   recordedByUser User              @relation(fields: [recordedBy], references: [id])
   createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
   @@index([studentId])
   @@index([paymentDate])
   @@index([receiptNo])
+  @@index([status])
   @@map("payments")
 }
 
@@ -213,6 +323,7 @@ model PaymentAllocation {
   termId          BigInt
   payment         Payment       @relation(fields: [paymentId], references: [id])
   createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([paymentId])
   @@map("payment_allocations")
@@ -220,18 +331,22 @@ model PaymentAllocation {
 
 /// Official receipt records
 model Receipt {
-  id          BigInt      @id @default(autoincrement())
-  receiptNo   String      @unique
-  studentId   BigInt
-  paymentId   BigInt      @unique
-  issuedDate  DateTime    @db.Date
-  issuedBy    BigInt
-  pdfPath     String?
-  student     Student     @relation(fields: [studentId], references: [id])
-  payment     Payment     @relation(fields: [paymentId], references: [id])
-  issuedByUser User       @relation(fields: [issuedBy], references: [id])
-  createdAt   DateTime    @default(now())
+  id             BigInt       @id @default(autoincrement())
+  receiptNo      String       // RCP-2026-001
+  academicYearId BigInt
+  studentId      BigInt
+  paymentId      BigInt       @unique
+  issuedDate     DateTime     @db.Date
+  issuedBy       BigInt
+  pdfPath        String?
+  student        Student      @relation(fields: [studentId], references: [id])
+  payment        Payment      @relation(fields: [paymentId], references: [id])
+  issuedByUser   User         @relation(fields: [issuedBy], references: [id])
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
+  @@unique([receiptNo, academicYearId]) // Unique per academic year
   @@map("receipts")
 }
 
@@ -242,7 +357,7 @@ model DebtRecord {
   termId        BigInt
   amountOwed    Int
   dueDate       DateTime      @db.Date
-  status        String        @default("pending") // pending, partial, paid
+  status        DebtStatus    @default(PENDING)
   notes         String?       @db.Text
   student       Student       @relation(fields: [studentId], references: [id])
   academicTerm  AcademicTerm  @relation(fields: [termId], references: [id])
@@ -258,16 +373,17 @@ model DebtRecord {
 
 /// Transport service records
 model Transport {
-  id            BigInt        @id @default(autoincrement())
-  studentId     BigInt        @unique
+  id            BigInt         @id @default(autoincrement())
+  studentId     BigInt         @unique
   monthlyRate   Int
+  billingDay    Int            @default(1) // Day of month to bill
   startTermId   BigInt?
   endTermId     BigInt?
-  status        String        @default("active") // active, inactive
+  status        TransportStatus @default(ACTIVE)
   vehicleDetails String?
-  student       Student       @relation(fields: [studentId], references: [id])
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  student       Student        @relation(fields: [studentId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@map("transport")
 }
@@ -283,22 +399,24 @@ model InventoryItem {
   reorderLevel  Int
   assignments   StudentInventory[]
   createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@map("inventory_items")
 }
 
 /// Stationery/items assigned to students
 model StudentInventory {
-  id          BigInt          @id @default(autoincrement())
+  id          BigInt           @id @default(autoincrement())
   studentId   BigInt
   itemId      BigInt
   quantity    Int
   termId      BigInt
-  isPaid      Boolean         @default(false)
-  status      String          @default("pending") // pending, fulfilled
-  student     Student         @relation(fields: [studentId], references: [id])
-  item        InventoryItem   @relation(fields: [itemId], references: [id])
-  createdAt   DateTime        @default(now())
+  isPaid      Boolean          @default(false)
+  status      InventoryStatus  @default(PENDING)
+  student     Student          @relation(fields: [studentId], references: [id])
+  item        InventoryItem    @relation(fields: [itemId], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@unique([studentId, itemId, termId])
   @@map("student_inventory")
@@ -358,14 +476,19 @@ model SystemLog {
 
 /// Notification logs (SMS/Email)
 model Notification {
-  id         BigInt      @id @default(autoincrement())
+  id         BigInt             @id @default(autoincrement())
   studentId  BigInt?
   guardianId BigInt?
-  message    String      @db.Text
-  channel    String      // sms, email
-  status     String      @default("pending") // pending, sent, failed
+  message    String             @db.Text
+  channel    NotificationChannel
+  status     NotificationStatus @default(PENDING)
   sentAt     DateTime?
-  createdAt  DateTime    @default(now())
+  student    Student?           @relation(fields: [studentId], references: [id])
+  guardian   Guardian?          @relation(fields: [guardianId], references: [id])
+  createdAt  DateTime           @default(now())
 
+  @@index([studentId])
+  @@index([guardianId])
+  @@index([status])
   @@map("notifications")
 }
